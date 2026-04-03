@@ -754,9 +754,10 @@ fn exec_options(
                 network_policy_amendment,
             } => {
                 let (label, shortcuts) = match network_policy_amendment.action {
-                    NetworkPolicyRuleAction::Allow => {
-                        ("Yes, and allow this host in the future".to_string(), keymap.approve_for_prefix.clone())
-                    }
+                    NetworkPolicyRuleAction::Allow => (
+                        "Yes, and allow this host in the future".to_string(),
+                        keymap.approve_for_prefix.clone(),
+                    ),
                     NetworkPolicyRuleAction::Deny => (
                         "No, and block this host in the future".to_string(),
                         Vec::new(),
@@ -849,6 +850,13 @@ fn patch_options(keymap: &ApprovalKeymap) -> Vec<ApprovalOption> {
 }
 
 fn permissions_options(keymap: &ApprovalKeymap) -> Vec<ApprovalOption> {
+    let deny_shortcuts = keymap
+        .decline
+        .iter()
+        .copied()
+        .filter(|shortcut| shortcut.parts() != (KeyCode::Esc, crossterm::event::KeyModifiers::NONE))
+        .collect();
+
     vec![
         ApprovalOption {
             label: "Yes, grant these permissions".to_string(),
@@ -863,7 +871,7 @@ fn permissions_options(keymap: &ApprovalKeymap) -> Vec<ApprovalOption> {
         ApprovalOption {
             label: "No, continue without permissions".to_string(),
             decision: ApprovalDecision::Review(ReviewDecision::Denied),
-            shortcuts: keymap.decline.clone(),
+            shortcuts: deny_shortcuts,
         },
     ]
 }
@@ -1019,6 +1027,8 @@ mod tests {
 
     fn make_elicitation_request() -> ApprovalRequest {
         ApprovalRequest::McpElicitation {
+            thread_id: ThreadId::new(),
+            thread_label: None,
             server_name: "test-server".to_string(),
             request_id: RequestId::String("request-1".to_string()),
             message: "Need more information".to_string(),
@@ -1596,7 +1606,11 @@ mod tests {
 
         let mut decision = None;
         while let Ok(ev) = rx.try_recv() {
-            if let AppEvent::CodexOp(Op::ResolveElicitation { decision: d, .. }) = ev {
+            if let AppEvent::SubmitThreadOp {
+                op: Op::ResolveElicitation { decision: d, .. },
+                ..
+            } = ev
+            {
                 decision = Some(d);
                 break;
             }
@@ -1626,7 +1640,11 @@ mod tests {
         view.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         let mut esc_decision = None;
         while let Ok(ev) = rx.try_recv() {
-            if let AppEvent::CodexOp(Op::ResolveElicitation { decision, .. }) = ev {
+            if let AppEvent::SubmitThreadOp {
+                op: Op::ResolveElicitation { decision, .. },
+                ..
+            } = ev
+            {
                 esc_decision = Some(decision);
                 break;
             }
@@ -1652,7 +1670,11 @@ mod tests {
         view.handle_key_event(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
         let mut n_decision = None;
         while let Ok(ev) = rx.try_recv() {
-            if let AppEvent::CodexOp(Op::ResolveElicitation { decision, .. }) = ev {
+            if let AppEvent::SubmitThreadOp {
+                op: Op::ResolveElicitation { decision, .. },
+                ..
+            } = ev
+            {
                 n_decision = Some(decision);
                 break;
             }
