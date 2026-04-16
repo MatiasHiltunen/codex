@@ -130,9 +130,13 @@ async fn thread_unsubscribe_keeps_thread_loaded_until_idle_timeout() -> Result<(
 async fn thread_unsubscribe_during_turn_keeps_turn_running() -> Result<()> {
     #[cfg(target_os = "windows")]
     let shell_command = vec![
-        "powershell".to_string(),
-        "-Command".to_string(),
-        "Start-Sleep -Seconds 1".to_string(),
+        "cmd.exe".to_string(),
+        "/d".to_string(),
+        "/c".to_string(),
+        "ping".to_string(),
+        "-n".to_string(),
+        "2".to_string(),
+        "127.0.0.1".to_string(),
     ];
     #[cfg(not(target_os = "windows"))]
     let shell_command = vec!["sleep".to_string(), "1".to_string()];
