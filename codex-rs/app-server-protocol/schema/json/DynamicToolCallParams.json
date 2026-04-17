@@ -5,6 +5,12 @@
     "callId": {
       "type": "string"
     },
+    "namespace": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "threadId": {
       "type": "string"
     },
@@ -18,6 +24,7 @@
   "required": [
     "arguments",
     "callId",
+    "namespace",
     "threadId",
     "tool",
     "turnId"

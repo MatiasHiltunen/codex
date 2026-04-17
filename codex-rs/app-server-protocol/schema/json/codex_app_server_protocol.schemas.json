@@ -1951,6 +1951,12 @@
         "callId": {
           "type": "string"
         },
+        "namespace": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "threadId": {
           "type": "string"
         },
@@ -1964,6 +1970,7 @@
       "required": [
         "arguments",
         "callId",
+        "namespace",
         "threadId",
         "tool",
         "turnId"
@@ -7278,6 +7285,12 @@
           "inputSchema": true,
           "name": {
             "type": "string"
+          },
+          "namespace": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -13595,6 +13608,7 @@
             "required": [
               "arguments",
               "id",
+              "namespace",
               "status",
               "tool",
               "type"
