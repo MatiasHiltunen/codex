@@ -88,9 +88,7 @@ fn parse_openai_file_upload_options_reads_store_in_library_config() {
     assert_eq!(
         parsed,
         Some(codex_api::OpenAiFileUploadOptions {
-            use_case: "codex".to_string(),
             store_in_library: true,
-            upload_source: None,
         })
     );
 }

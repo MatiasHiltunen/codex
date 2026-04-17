@@ -6,7 +6,6 @@ use crate::AuthProvider;
 use codex_client::build_reqwest_client_with_custom_ca;
 use reqwest::StatusCode;
 use reqwest::header::CONTENT_LENGTH;
-use reqwest::header::CONTENT_TYPE;
 use serde::Deserialize;
 use tokio::fs::File;
 use tokio::time::Instant;
@@ -23,17 +22,13 @@ const OPENAI_FILE_USE_CASE: &str = "codex";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenAiFileUploadOptions {
-    pub use_case: String,
     pub store_in_library: bool,
-    pub upload_source: Option<String>,
 }
 
 impl Default for OpenAiFileUploadOptions {
     fn default() -> Self {
         Self {
-            use_case: OPENAI_FILE_USE_CASE.to_string(),
             store_in_library: false,
-            upload_source: None,
         }
     }
 }
@@ -47,13 +42,6 @@ pub struct UploadedOpenAiFile {
     pub file_size_bytes: u64,
     pub mime_type: Option<String>,
     pub path: PathBuf,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DownloadedOpenAiFile {
-    pub bytes: Vec<u8>,
-    pub mime_type: Option<String>,
-    pub download_url: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -130,7 +118,7 @@ pub async fn download_openai_file(
     base_url: &str,
     auth: &impl AuthProvider,
     download_url: &str,
-) -> Result<DownloadedOpenAiFile, OpenAiFileError> {
+) -> Result<Vec<u8>, OpenAiFileError> {
     let resolved_url = resolve_openai_file_download_url(base_url, download_url)?;
     let request_builder = if should_attach_auth_to_openai_file_url(&resolved_url, base_url) {
         authorized_request(auth, reqwest::Method::GET, resolved_url.as_str())
@@ -147,11 +135,6 @@ pub async fn download_openai_file(
             source,
         })?;
     let status = response.status();
-    let mime_type = response
-        .headers()
-        .get(CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_string);
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
         return Err(OpenAiFileError::UnexpectedStatus {
@@ -167,11 +150,7 @@ pub async fn download_openai_file(
             url: resolved_url.to_string(),
             source,
         })?;
-    Ok(DownloadedOpenAiFile {
-        bytes: bytes.to_vec(),
-        mime_type,
-        download_url: resolved_url.to_string(),
-    })
+    Ok(bytes.to_vec())
 }
 
 pub async fn upload_local_file(
@@ -213,13 +192,10 @@ pub async fn upload_local_file(
     let mut create_request = serde_json::json!({
         "file_name": file_name,
         "file_size": metadata.len(),
-        "use_case": options.use_case,
+        "use_case": OPENAI_FILE_USE_CASE,
     });
     if options.store_in_library {
         create_request["store_in_library"] = serde_json::json!(true);
-    }
-    if let Some(upload_source) = &options.upload_source {
-        create_request["upload_source"] = serde_json::json!(upload_source);
     }
     let create_response = authorized_request(auth, reqwest::Method::POST, &create_url)
         .json(&create_request)
@@ -385,21 +361,6 @@ fn resolve_openai_file_download_url(
 }
 
 fn should_attach_auth_to_openai_file_url(download_url: &Url, base_url: &str) -> bool {
-    let host = download_url
-        .host_str()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if host == "localhost"
-        || host == "127.0.0.1"
-        || host == "::1"
-        || host == "openai.com"
-        || host.ends_with(".openai.com")
-        || host == "chatgpt.com"
-        || (host.ends_with(".chatgpt.com") && !host.starts_with("ab."))
-    {
-        return true;
-    }
-
     let Ok(base_url) = Url::parse(base_url) else {
         return false;
     };
@@ -435,12 +396,7 @@ mod tests {
     use wiremock::matchers::path;
 
     fn chatgpt_auth() -> CoreAuthProvider {
-        CoreAuthProvider {
-            token: Some("token".to_string()),
-            account_id: Some("account_id".to_string()),
-            originator: Some("Codex_Desktop".to_string()),
-            user_agent: Some("Codex Desktop/Test".to_string()),
-        }
+        CoreAuthProvider::for_test(Some("token"), Some("account_id"))
     }
 
     fn base_url_for(server: &MockServer) -> String {
@@ -454,8 +410,6 @@ mod tests {
             .and(path("/files/download/file_123"))
             .and(header("authorization", "Bearer token"))
             .and(header("chatgpt-account-id", "account_id"))
-            .and(header("originator", "Codex_Desktop"))
-            .and(header("user-agent", "Codex Desktop/Test"))
             .respond_with(
                 ResponseTemplate::new(200)
                     .insert_header("content-type", "text/plain")
@@ -472,12 +426,7 @@ mod tests {
         .await
         .expect("download succeeds");
 
-        assert_eq!(downloaded.bytes, b"hello".to_vec());
-        assert_eq!(downloaded.mime_type, Some("text/plain".to_string()));
-        assert_eq!(
-            downloaded.download_url,
-            format!("{}/files/download/file_123", server.uri())
-        );
+        assert_eq!(downloaded, b"hello".to_vec());
     }
 
     #[tokio::test]

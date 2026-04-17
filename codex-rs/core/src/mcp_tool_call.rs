@@ -664,11 +664,7 @@ const MCP_TOOL_OPENAI_FILE_UPLOAD_CONFIG_KEY: &str = "openai/fileUploadConfig";
 #[derive(Debug, Clone, Deserialize)]
 struct RawOpenAiFileUploadConfig {
     #[serde(default)]
-    use_case: Option<String>,
-    #[serde(default)]
     store_in_library: bool,
-    #[serde(default)]
-    upload_source: Option<String>,
 }
 
 fn parse_openai_file_upload_options(
@@ -679,17 +675,13 @@ fn parse_openai_file_upload_options(
         .cloned()
         .and_then(|value| serde_json::from_value::<RawOpenAiFileUploadConfig>(value).ok())?;
 
-    if raw.use_case.is_none() && !raw.store_in_library && raw.upload_source.is_none() {
+    if !raw.store_in_library {
         return None;
     }
 
-    let mut options = OpenAiFileUploadOptions::default();
-    if let Some(use_case) = raw.use_case {
-        options.use_case = use_case;
-    }
-    options.store_in_library = raw.store_in_library;
-    options.upload_source = raw.upload_source;
-    Some(options)
+    Some(OpenAiFileUploadOptions {
+        store_in_library: true,
+    })
 }
 
 fn custom_mcp_tool_approval_mode(

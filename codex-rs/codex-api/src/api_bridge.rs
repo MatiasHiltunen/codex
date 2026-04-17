@@ -179,8 +179,6 @@ struct UsageErrorBody {
 pub struct CoreAuthProvider {
     pub token: Option<String>,
     pub account_id: Option<String>,
-    pub originator: Option<String>,
-    pub user_agent: Option<String>,
 }
 
 impl CoreAuthProvider {
@@ -198,8 +196,6 @@ impl CoreAuthProvider {
         Self {
             token: token.map(str::to_string),
             account_id: account_id.map(str::to_string),
-            originator: None,
-            user_agent: None,
         }
     }
 }
@@ -215,16 +211,6 @@ impl ApiAuthProvider for CoreAuthProvider {
             && let Ok(header) = HeaderValue::from_str(account_id)
         {
             let _ = headers.insert("ChatGPT-Account-ID", header);
-        }
-        if let Some(originator) = self.originator.as_ref()
-            && let Ok(header) = HeaderValue::from_str(originator)
-        {
-            let _ = headers.insert("originator", header);
-        }
-        if let Some(user_agent) = self.user_agent.as_ref()
-            && let Ok(header) = HeaderValue::from_str(user_agent)
-        {
-            let _ = headers.insert(http::header::USER_AGENT, header);
         }
     }
 }

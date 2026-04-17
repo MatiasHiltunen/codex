@@ -36,13 +36,10 @@ pub(crate) async fn maybe_materialize_codex_apps_library_download_result(
     result: CallToolResult,
 ) -> CallToolResult {
     let auth = sess.services.auth_manager.auth().await;
-    let client_metadata = sess.app_server_client_metadata().await;
     maybe_materialize_codex_apps_library_download_result_with_auth(
         turn_context,
         &sess.conversation_id.to_string(),
         auth.as_ref(),
-        client_metadata.client_name.as_deref(),
-        client_metadata.client_version.as_deref(),
         server,
         tool_name,
         result,
@@ -54,8 +51,6 @@ async fn maybe_materialize_codex_apps_library_download_result_with_auth(
     turn_context: &TurnContext,
     session_id: &str,
     auth: Option<&CodexAuth>,
-    client_name: Option<&str>,
-    client_version: Option<&str>,
     server: &str,
     tool_name: &str,
     mut result: CallToolResult,
@@ -94,8 +89,6 @@ async fn maybe_materialize_codex_apps_library_download_result_with_auth(
             .chatgpt_account_id
             .clone()
             .or(token_data.account_id),
-        originator: client_name.map(str::to_string),
-        user_agent: build_desktop_style_user_agent(client_name, client_version),
     };
     let downloaded = match download_openai_file(
         turn_context.config.chatgpt_base_url.trim_end_matches('/'),
@@ -135,7 +128,7 @@ async fn maybe_materialize_codex_apps_library_download_result_with_auth(
         );
         return result;
     }
-    if let Err(error) = tokio::fs::write(artifact_path.as_path(), &downloaded.bytes).await {
+    if let Err(error) = tokio::fs::write(artifact_path.as_path(), &downloaded).await {
         warn!(
             error = %error,
             path = %artifact_path.display(),
@@ -156,20 +149,6 @@ async fn maybe_materialize_codex_apps_library_download_result_with_auth(
         "text": format!("Downloaded library file to local path: {local_path}"),
     }));
     result
-}
-
-fn build_desktop_style_user_agent(
-    client_name: Option<&str>,
-    client_version: Option<&str>,
-) -> Option<String> {
-    let (Some(client_name), Some(client_version)) = (client_name, client_version) else {
-        return None;
-    };
-    Some(format!(
-        "{client_name}/{client_version} ({}; {})",
-        std::env::consts::OS,
-        std::env::consts::ARCH
-    ))
 }
 
 fn extract_library_download_payload(
@@ -269,8 +248,6 @@ mod tests {
             &turn_context,
             "session-1",
             Some(&CodexAuth::create_dummy_chatgpt_auth_for_testing()),
-            Some("Codex Desktop"),
-            Some("0.0.0"),
             CODEX_APPS_MCP_SERVER_NAME,
             "calendar/list_events",
             original.clone(),
@@ -287,8 +264,6 @@ mod tests {
             .and(path("/files/download/file_123"))
             .and(header("authorization", "Bearer Access Token"))
             .and(header("chatgpt-account-id", "account_id"))
-            .and(header("originator", "Codex Desktop"))
-            .and(header("user-agent", "Codex Desktop/0.0.0 (macos; aarch64)"))
             .respond_with(
                 ResponseTemplate::new(200)
                     .insert_header("content-type", "text/plain")
@@ -325,8 +300,6 @@ mod tests {
             &turn_context,
             "session-1",
             Some(&CodexAuth::create_dummy_chatgpt_auth_for_testing()),
-            Some("Codex Desktop"),
-            Some("0.0.0"),
             CODEX_APPS_MCP_SERVER_NAME,
             LIBRARY_DOWNLOAD_FILE_TOOL_NAME,
             original,
@@ -373,8 +346,6 @@ mod tests {
             &turn_context,
             "session-1",
             None,
-            Some("Codex Desktop"),
-            Some("0.0.0"),
             CODEX_APPS_MCP_SERVER_NAME,
             LIBRARY_DOWNLOAD_FILE_TOOL_NAME,
             original.clone(),
@@ -391,8 +362,6 @@ mod tests {
             .and(path("/files/download/file_123"))
             .and(header("authorization", "Bearer Access Token"))
             .and(header("chatgpt-account-id", "account_id"))
-            .and(header("originator", "Codex Desktop"))
-            .and(header("user-agent", "Codex Desktop/0.0.0 (macos; aarch64)"))
             .respond_with(
                 ResponseTemplate::new(200)
                     .insert_header("content-type", "text/plain")
@@ -427,8 +396,6 @@ mod tests {
             &turn_context,
             "session-1",
             Some(&CodexAuth::create_dummy_chatgpt_auth_for_testing()),
-            Some("Codex Desktop"),
-            Some("0.0.0"),
             CODEX_APPS_MCP_SERVER_NAME,
             LIBRARY_DOWNLOAD_FILE_TOOL_NAME,
             original,

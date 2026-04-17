@@ -130,8 +130,6 @@ async fn build_uploaded_local_argument_value(
             .chatgpt_account_id
             .clone()
             .or(token_data.account_id),
-        originator: None,
-        user_agent: None,
     };
     let default_upload_options = OpenAiFileUploadOptions::default();
     let uploaded = upload_local_file(
@@ -329,7 +327,6 @@ mod tests {
 
         let upload_options = OpenAiFileUploadOptions {
             store_in_library: true,
-            ..OpenAiFileUploadOptions::default()
         };
         let rewritten = build_uploaded_local_argument_value(
             &turn_context,
