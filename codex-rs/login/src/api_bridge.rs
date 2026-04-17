@@ -22,6 +22,14 @@ pub fn auth_provider_from_auth(
     }
 
     if let Some(auth) = auth {
+        if auth.is_agent_identity_only() {
+            return Ok(CoreAuthProvider::from_bearer_token(
+                /*token*/ None,
+                auth.agent_identity_record()
+                    .map(|identity| identity.workspace_id),
+            ));
+        }
+
         let token = auth.get_token()?;
         Ok(CoreAuthProvider::from_bearer_token(
             Some(token),

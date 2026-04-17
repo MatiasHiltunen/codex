@@ -24,7 +24,7 @@ impl AgentIdentityManager {
         &self,
         agent_task: &RegisteredAgentTask,
     ) -> Result<Option<String>> {
-        if !self.feature_enabled {
+        if !self.is_enabled() {
             return Ok(None);
         }
 
