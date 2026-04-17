@@ -36,7 +36,8 @@ pub(crate) enum TerminalTitleItem {
     AppName,
     /// Project root name, or a compact cwd fallback.
     Project,
-    /// Animated task spinner while active.
+    /// Terminal-title activity indicator while active.
+    #[strum(to_string = "activity", serialize = "spinner")]
     Spinner,
     /// Compact runtime status text.
     Status,
@@ -56,7 +57,7 @@ impl TerminalTitleItem {
             TerminalTitleItem::AppName => "Codex app name",
             TerminalTitleItem::Project => "Project name (falls back to current directory name)",
             TerminalTitleItem::Spinner => {
-                "Animated task spinner (omitted while idle or when animations are off)"
+                "Spinner while working, action-required message while blocked."
             }
             TerminalTitleItem::Status => "Compact session status text (Ready, Working, Thinking)",
             TerminalTitleItem::Thread => "Current thread title (omitted until available)",
@@ -76,7 +77,7 @@ impl TerminalTitleItem {
         match self {
             TerminalTitleItem::AppName => "codex",
             TerminalTitleItem::Project => "my-project",
-            TerminalTitleItem::Spinner => "⠋",
+            TerminalTitleItem::Spinner => "[ ! ]",
             TerminalTitleItem::Status => "Working",
             TerminalTitleItem::Thread => "Investigate flaky test",
             TerminalTitleItem::GitBranch => "feat/awesome-feature",
@@ -87,8 +88,8 @@ impl TerminalTitleItem {
 
     /// Returns the separator to place before this item in a rendered title.
     ///
-    /// The spinner gets a plain space on either side so it reads as
-    /// `my-project <spinner> Working` rather than `my-project | <spinner> | Working`.
+    /// The activity indicator gets a plain space on either side so it reads as
+    /// `my-project <activity> Working` rather than `my-project | <activity> | Working`.
     /// All other adjacent items are joined with ` | `.
     pub(crate) fn separator_from_previous(self, previous: Option<Self>) -> &'static str {
         match previous {
@@ -276,7 +277,7 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let selected = [
             "project".to_string(),
-            "spinner".to_string(),
+            "activity".to_string(),
             "status".to_string(),
             "thread".to_string(),
         ];
@@ -290,7 +291,7 @@ mod tests {
     #[test]
     fn parse_terminal_title_items_preserves_order() {
         let items =
-            parse_terminal_title_items(["project", "spinner", "status", "thread"].into_iter());
+            parse_terminal_title_items(["project", "activity", "status", "thread"].into_iter());
         assert_eq!(
             items,
             Some(vec![
@@ -309,13 +310,27 @@ mod tests {
     }
 
     #[test]
+    fn activity_is_canonical_and_accepts_spinner_legacy_id() {
+        assert_eq!(TerminalTitleItem::Spinner.to_string(), "activity");
+        assert_eq!(
+            "activity".parse::<TerminalTitleItem>(),
+            Ok(TerminalTitleItem::Spinner)
+        );
+        assert_eq!(
+            "spinner".parse::<TerminalTitleItem>(),
+            Ok(TerminalTitleItem::Spinner)
+        );
+    }
+
+    #[test]
     fn parse_terminal_title_items_accepts_kebab_case_variants() {
-        let items = parse_terminal_title_items(["app-name", "git-branch"].into_iter());
+        let items = parse_terminal_title_items(["app-name", "git-branch", "activity"].into_iter());
         assert_eq!(
             items,
             Some(vec![
                 TerminalTitleItem::AppName,
                 TerminalTitleItem::GitBranch,
+                TerminalTitleItem::Spinner,
             ])
         );
     }

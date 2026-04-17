@@ -957,7 +957,7 @@ pub(crate) struct ChatWidget {
     terminal_title_invalid_items_warned: Arc<AtomicBool>,
     // Last terminal title emitted, to avoid writing duplicate OSC updates.
     pub(crate) last_terminal_title: Option<String>,
-    // Last "action required" state observed by the terminal-title renderer.
+    // Last visible "action required" state observed by the terminal-title renderer.
     last_terminal_title_requires_action: bool,
     // Original terminal-title config captured when the setup UI opens.
     //
@@ -1804,13 +1804,13 @@ impl ChatWidget {
             .tui_terminal_title
             .as_ref()
             .is_some_and(|items| items.iter().any(|item| item == "status"));
-        let title_uses_spinner = self
-            .config
-            .tui_terminal_title
-            .as_ref()
-            .is_none_or(|items| items.iter().any(|item| item == "spinner"));
+        let title_uses_activity = self.config.tui_terminal_title.as_ref().is_none_or(|items| {
+            items
+                .iter()
+                .any(|item| item == "activity" || item == "spinner")
+        });
         if title_uses_status
-            || (title_uses_spinner
+            || (title_uses_activity
                 && self.terminal_title_status_kind == TerminalTitleStatusKind::Undoing)
         {
             self.refresh_terminal_title();
@@ -4273,12 +4273,12 @@ impl ChatWidget {
         self.update_due_hook_visibility();
         self.schedule_hook_timer_if_needed();
         self.bottom_pane.pre_draw_tick();
-        if self.bottom_pane.terminal_title_requires_action()
-            != self.last_terminal_title_requires_action
-        {
+        if self.terminal_title_shows_action_required() != self.last_terminal_title_requires_action {
             self.refresh_terminal_title();
         }
-        if self.should_animate_terminal_title_spinner() {
+        if self.should_animate_terminal_title_spinner()
+            || self.should_animate_terminal_title_action_required()
+        {
             self.refresh_terminal_title();
         }
     }
