@@ -518,6 +518,7 @@ fn validated_network_policy_amendment_host_rejects_mismatch() {
 async fn start_managed_network_proxy_applies_execpolicy_network_rules() -> anyhow::Result<()> {
     let spec = crate::config::NetworkProxySpec::from_config_and_constraints(
         NetworkProxyConfig::default(),
+        /*mitm_feature_enabled*/ false,
         /*requirements*/ None,
         &SandboxPolicy::new_workspace_write_policy(),
     )?;
@@ -553,6 +554,7 @@ async fn start_managed_network_proxy_ignores_invalid_execpolicy_network_rules() 
 {
     let spec = crate::config::NetworkProxySpec::from_config_and_constraints(
         NetworkProxyConfig::default(),
+        /*mitm_feature_enabled*/ false,
         Some(NetworkConstraints {
             domains: Some(NetworkDomainPermissionsToml {
                 entries: std::collections::BTreeMap::from([(
@@ -596,6 +598,7 @@ async fn start_managed_network_proxy_ignores_invalid_execpolicy_network_rules() 
 async fn managed_network_proxy_decider_survives_full_access_start() -> anyhow::Result<()> {
     let spec = crate::config::NetworkProxySpec::from_config_and_constraints(
         NetworkProxyConfig::default(),
+        /*mitm_feature_enabled*/ false,
         Some(NetworkConstraints {
             enabled: Some(true),
             ..Default::default()
@@ -679,6 +682,7 @@ async fn new_turn_refreshes_managed_network_proxy_for_sandbox_change() -> anyhow
     };
     let spec = crate::config::NetworkProxySpec::from_config_and_constraints(
         network_config,
+        /*mitm_feature_enabled*/ false,
         Some(requirements),
         &initial_policy,
     )?;
@@ -746,6 +750,7 @@ async fn new_turn_refreshes_managed_network_proxy_for_sandbox_change() -> anyhow
 async fn danger_full_access_turns_do_not_expose_managed_network_proxy() -> anyhow::Result<()> {
     let network_spec = crate::config::NetworkProxySpec::from_config_and_constraints(
         NetworkProxyConfig::default(),
+        /*mitm_feature_enabled*/ false,
         Some(NetworkConstraints {
             enabled: Some(true),
             ..Default::default()
@@ -809,6 +814,7 @@ async fn danger_full_access_tool_attempts_do_not_enforce_managed_network() -> an
 
     let network_spec = crate::config::NetworkProxySpec::from_config_and_constraints(
         NetworkProxyConfig::default(),
+        /*mitm_feature_enabled*/ false,
         Some(NetworkConstraints {
             enabled: Some(true),
             ..Default::default()
@@ -881,6 +887,7 @@ async fn workspace_write_turns_continue_to_expose_managed_network_proxy() -> any
     let sandbox_policy = SandboxPolicy::new_workspace_write_policy();
     let network_spec = crate::config::NetworkProxySpec::from_config_and_constraints(
         NetworkProxyConfig::default(),
+        /*mitm_feature_enabled*/ false,
         Some(NetworkConstraints {
             enabled: Some(true),
             ..Default::default()
@@ -904,6 +911,7 @@ async fn user_shell_commands_do_not_inherit_managed_network_proxy() -> anyhow::R
     let sandbox_policy = SandboxPolicy::new_workspace_write_policy();
     let network_spec = crate::config::NetworkProxySpec::from_config_and_constraints(
         NetworkProxyConfig::default(),
+        /*mitm_feature_enabled*/ false,
         Some(NetworkConstraints {
             enabled: Some(true),
             ..Default::default()

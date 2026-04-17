@@ -95,6 +95,8 @@ pub enum Feature {
     ExecPermissionApprovals,
     /// Enable Claude-style lifecycle hooks loaded from hooks.json files.
     CodexHooks,
+    /// Enable HTTPS MITM inspection and hook based request clamping in the network proxy.
+    MitmProxy,
     /// Expose the built-in request_permissions tool.
     RequestPermissionsTool,
     /// Allow the model to request web searches that fetch live content.
@@ -710,6 +712,12 @@ pub const FEATURES: &[FeatureSpec] = &[
     FeatureSpec {
         id: Feature::CodexHooks,
         key: "codex_hooks",
+        stage: Stage::UnderDevelopment,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::MitmProxy,
+        key: "mitm_proxy",
         stage: Stage::UnderDevelopment,
         default_enabled: false,
     },

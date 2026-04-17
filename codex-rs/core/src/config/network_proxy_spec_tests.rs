@@ -38,6 +38,26 @@ fn build_state_with_audit_metadata_threads_metadata_to_state() {
 }
 
 #[test]
+fn constructor_rejects_mitm_without_feature_gate() {
+    let mut config = NetworkProxyConfig::default();
+    config.network.mitm = true;
+
+    let err = NetworkProxySpec::from_config_and_constraints(
+        config,
+        /*mitm_feature_enabled*/ false,
+        /*requirements*/ None,
+        &SandboxPolicy::new_read_only_policy(),
+    )
+    .expect_err("MITM should be gated at construction");
+
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    assert!(
+        err.to_string()
+            .contains("network MITM settings are configured, but `mitm_proxy` is not enabled in the active feature configuration")
+    );
+}
+
+#[test]
 fn requirements_allowed_domains_are_a_baseline_for_user_allowlist() {
     let mut config = NetworkProxyConfig::default();
     config
@@ -53,6 +73,7 @@ fn requirements_allowed_domains_are_a_baseline_for_user_allowlist() {
 
     let spec = NetworkProxySpec::from_config_and_constraints(
         config,
+        /*mitm_feature_enabled*/ false,
         Some(requirements),
         &SandboxPolicy::new_read_only_policy(),
     )
@@ -88,6 +109,7 @@ fn requirements_allowed_domains_do_not_override_user_denies_for_same_pattern() {
 
     let spec = NetworkProxySpec::from_config_and_constraints(
         config,
+        /*mitm_feature_enabled*/ false,
         Some(requirements),
         &SandboxPolicy::new_workspace_write_policy(),
     )
@@ -120,6 +142,7 @@ fn requirements_allowlist_expansion_keeps_user_entries_mutable() {
 
     let spec = NetworkProxySpec::from_config_and_constraints(
         config,
+        /*mitm_feature_enabled*/ false,
         Some(requirements),
         &SandboxPolicy::new_workspace_write_policy(),
     )
@@ -163,6 +186,7 @@ fn danger_full_access_keeps_managed_allowlist_and_denylist_fixed() {
 
     let spec = NetworkProxySpec::from_config_and_constraints(
         config,
+        /*mitm_feature_enabled*/ false,
         Some(requirements),
         &SandboxPolicy::DangerFullAccess,
     )
@@ -197,6 +221,7 @@ fn managed_allowed_domains_only_disables_default_mode_allowlist_expansion() {
 
     let spec = NetworkProxySpec::from_config_and_constraints(
         config,
+        /*mitm_feature_enabled*/ false,
         Some(requirements),
         &SandboxPolicy::new_workspace_write_policy(),
     )
@@ -226,6 +251,7 @@ fn managed_allowed_domains_only_ignores_user_allowlist_and_hard_denies_misses() 
 
     let spec = NetworkProxySpec::from_config_and_constraints(
         config,
+        /*mitm_feature_enabled*/ false,
         Some(requirements),
         &SandboxPolicy::new_workspace_write_policy(),
     )
@@ -256,6 +282,7 @@ fn managed_allowed_domains_only_without_managed_allowlist_blocks_all_user_domain
 
     let spec = NetworkProxySpec::from_config_and_constraints(
         config,
+        /*mitm_feature_enabled*/ false,
         Some(requirements),
         &SandboxPolicy::new_workspace_write_policy(),
     )
@@ -280,6 +307,7 @@ fn managed_allowed_domains_only_blocks_all_user_domains_in_full_access_without_m
 
     let spec = NetworkProxySpec::from_config_and_constraints(
         config,
+        /*mitm_feature_enabled*/ false,
         Some(requirements),
         &SandboxPolicy::DangerFullAccess,
     )
@@ -307,6 +335,7 @@ fn deny_only_requirements_do_not_create_allow_constraints_in_full_access() {
 
     let spec = NetworkProxySpec::from_config_and_constraints(
         config,
+        /*mitm_feature_enabled*/ false,
         Some(requirements),
         &SandboxPolicy::DangerFullAccess,
     )
@@ -340,6 +369,7 @@ fn allow_only_requirements_do_not_create_deny_constraints_in_full_access() {
 
     let spec = NetworkProxySpec::from_config_and_constraints(
         config,
+        /*mitm_feature_enabled*/ false,
         Some(requirements),
         &SandboxPolicy::DangerFullAccess,
     )
@@ -373,6 +403,7 @@ fn requirements_denied_domains_are_a_baseline_for_default_mode() {
 
     let spec = NetworkProxySpec::from_config_and_constraints(
         config,
+        /*mitm_feature_enabled*/ false,
         Some(requirements),
         &SandboxPolicy::new_workspace_write_policy(),
     )
@@ -408,6 +439,7 @@ fn requirements_denylist_expansion_keeps_user_entries_mutable() {
 
     let spec = NetworkProxySpec::from_config_and_constraints(
         config,
+        /*mitm_feature_enabled*/ false,
         Some(requirements),
         &SandboxPolicy::new_workspace_write_policy(),
     )

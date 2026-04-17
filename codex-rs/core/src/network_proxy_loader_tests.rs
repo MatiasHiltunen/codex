@@ -1,8 +1,16 @@
 use super::*;
 
+use crate::config_loader::ConfigLayerEntry;
+use crate::config_loader::ConfigLayerStack;
+use crate::config_loader::ConfigRequirements;
+use crate::config_loader::ConfigRequirementsToml;
+use crate::config_loader::RequirementSource;
+use crate::config_loader::Sourced;
+use codex_app_server_protocol::ConfigLayerSource;
 use codex_execpolicy::Decision;
 use codex_execpolicy::NetworkRuleProtocol;
 use codex_execpolicy::Policy;
+use codex_features::Feature;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -316,4 +324,125 @@ default_permissions = "workspace"
         constraints.denied_domains,
         Some(vec!["blocked.example.com".to_string()])
     );
+}
+
+fn stack_with_user_config(config: toml::Value) -> ConfigLayerStack {
+    stack_with_user_config_and_requirements(config, ConfigRequirements::default())
+}
+
+fn stack_with_user_config_and_requirements(
+    config: toml::Value,
+    requirements: ConfigRequirements,
+) -> ConfigLayerStack {
+    ConfigLayerStack::new(
+        vec![ConfigLayerEntry::new(
+            ConfigLayerSource::User {
+                file: "/tmp/config.toml".try_into().expect("absolute path"),
+            },
+            config,
+        )],
+        requirements,
+        ConfigRequirementsToml::default(),
+    )
+    .expect("config stack should build")
+}
+
+#[test]
+fn mitm_proxy_feature_gate_is_disabled_by_default_in_loader() {
+    let layers = stack_with_user_config(
+        toml::from_str(
+            r#"
+default_permissions = "workspace"
+
+[permissions.workspace.network]
+mitm = true
+"#,
+        )
+        .expect("config should parse"),
+    );
+
+    assert!(
+        !managed_features_from_layers(&layers)
+            .expect("features should resolve")
+            .enabled(Feature::MitmProxy)
+    );
+}
+
+#[test]
+fn mitm_proxy_feature_gate_respects_feature_table_in_loader() {
+    let layers = stack_with_user_config(
+        toml::from_str(
+            r#"
+default_permissions = "workspace"
+
+[features]
+mitm_proxy = true
+
+[permissions.workspace.network]
+mitm = true
+"#,
+        )
+        .expect("config should parse"),
+    );
+
+    assert!(
+        managed_features_from_layers(&layers)
+            .expect("features should resolve")
+            .enabled(Feature::MitmProxy)
+    );
+}
+
+#[test]
+fn managed_feature_requirements_override_user_mitm_enablement_in_loader() {
+    let layers = stack_with_user_config_and_requirements(
+        toml::from_str(
+            r#"
+default_permissions = "workspace"
+
+[features]
+mitm_proxy = true
+"#,
+        )
+        .expect("config should parse"),
+        ConfigRequirements {
+            feature_requirements: Some(Sourced::new(
+                crate::config_loader::FeatureRequirementsToml {
+                    entries: std::collections::BTreeMap::from([("mitm_proxy".to_string(), false)]),
+                },
+                RequirementSource::CloudRequirements,
+            )),
+            ..Default::default()
+        },
+    );
+
+    assert!(
+        !managed_features_from_layers(&layers)
+            .expect("features should resolve")
+            .enabled(Feature::MitmProxy)
+    );
+}
+
+#[test]
+fn build_config_state_from_layers_rejects_mitm_when_feature_is_disabled() {
+    let layers = stack_with_user_config(
+        toml::from_str(
+            r#"
+default_permissions = "workspace"
+
+[permissions.workspace.network]
+mitm = true
+"#,
+        )
+        .expect("config should parse"),
+    );
+
+    match build_config_state_from_layers(&layers, &Policy::empty()) {
+        Ok(_) => panic!("MITM should be gated"),
+        Err(err) => {
+            assert!(
+                err.to_string()
+                    .contains("network MITM settings are configured, but `mitm_proxy` is not enabled in the active feature configuration")
+            );
+        }
+    }
 }

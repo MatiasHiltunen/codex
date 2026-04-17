@@ -1574,6 +1574,7 @@ async fn guardian_review_session_config_preserves_parent_network_proxy() {
     let mut parent_config = test_config().await;
     let network = NetworkProxySpec::from_config_and_constraints(
         NetworkProxyConfig::default(),
+        /*mitm_feature_enabled*/ false,
         Some(NetworkConstraints {
             enabled: Some(true),
             domains: Some(NetworkDomainPermissionsToml {
@@ -1647,6 +1648,7 @@ async fn guardian_review_session_config_uses_live_network_proxy_state() {
     parent_config.permissions.network = Some(
         NetworkProxySpec::from_config_and_constraints(
             parent_network,
+            /*mitm_feature_enabled*/ false,
             /*requirements*/ None,
             parent_config.permissions.sandbox_policy.get(),
         )
@@ -1672,6 +1674,7 @@ async fn guardian_review_session_config_uses_live_network_proxy_state() {
         Some(
             NetworkProxySpec::from_config_and_constraints(
                 live_network,
+                /*mitm_feature_enabled*/ false,
                 /*requirements*/ None,
                 &SandboxPolicy::new_read_only_policy(),
             )

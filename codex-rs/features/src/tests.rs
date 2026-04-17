@@ -122,6 +122,13 @@ fn request_permissions_tool_is_under_development() {
 }
 
 #[test]
+fn mitm_proxy_is_under_development() {
+    assert_eq!(Feature::MitmProxy.stage(), Stage::UnderDevelopment);
+    assert_eq!(Feature::MitmProxy.default_enabled(), false);
+    assert_eq!(feature_for_key("mitm_proxy"), Some(Feature::MitmProxy));
+}
+
+#[test]
 fn tool_suggest_is_stable_and_enabled_by_default() {
     assert_eq!(Feature::ToolSuggest.stage(), Stage::Stable);
     assert_eq!(Feature::ToolSuggest.default_enabled(), true);

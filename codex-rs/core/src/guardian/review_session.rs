@@ -741,6 +741,7 @@ pub(crate) fn build_guardian_review_session_config(
             .map(|network| network.value.clone());
         guardian_config.permissions.network = Some(NetworkProxySpec::from_config_and_constraints(
             live_network_config,
+            parent_config.features.enabled(Feature::MitmProxy),
             network_constraints,
             &SandboxPolicy::new_read_only_policy(),
         )?);

@@ -1,5 +1,7 @@
+use crate::config::ManagedFeatures;
 use crate::config::find_codex_home;
 use crate::config::resolve_permission_profile;
+use crate::config::validate_mitm_feature_gate;
 use crate::config_loader::CloudRequirementsLoader;
 use crate::config_loader::ConfigLayerStack;
 use crate::config_loader::ConfigLayerStackOrdering;
@@ -13,9 +15,14 @@ use anyhow::Result;
 use async_trait::async_trait;
 use codex_app_server_protocol::ConfigLayerSource;
 use codex_config::CONFIG_TOML_FILE;
+use codex_config::config_toml::ConfigToml;
 use codex_config::permissions_toml::NetworkToml;
 use codex_config::permissions_toml::PermissionsToml;
 use codex_config::permissions_toml::overlay_network_domain_permissions;
+use codex_features::Feature;
+use codex_features::FeatureConfigSource;
+use codex_features::FeatureOverrides;
+use codex_features::Features;
 use codex_network_proxy::ConfigReloader;
 use codex_network_proxy::ConfigState;
 use codex_network_proxy::NetworkProxyConfig;
@@ -69,11 +76,8 @@ async fn build_config_state_with_mtimes() -> Result<(ConfigState, Vec<LayerMtime
         );
     }
 
-    let config = config_from_layers(&config_layer_stack, &exec_policy)?;
-
-    let constraints = enforce_trusted_constraints(&config_layer_stack, &config)?;
+    let state = build_config_state_from_layers(&config_layer_stack, &exec_policy)?;
     let layer_mtimes = collect_layer_mtimes(&config_layer_stack);
-    let state = build_config_state(config, constraints)?;
     Ok((state, layer_mtimes))
 }
 
@@ -216,6 +220,54 @@ fn config_from_layers(
     }
     apply_exec_policy_network_rules(&mut config, exec_policy);
     Ok(config)
+}
+
+fn build_config_state_from_layers(
+    layers: &ConfigLayerStack,
+    exec_policy: &codex_execpolicy::Policy,
+) -> Result<ConfigState> {
+    let features = managed_features_from_layers(layers)?;
+    let config = config_from_layers(layers, exec_policy)?;
+    validate_mitm_feature_gate(&config, features.enabled(Feature::MitmProxy))?;
+    let constraints = enforce_trusted_constraints(layers, &config)?;
+    build_config_state(config, constraints).context("failed to build network proxy state")
+}
+
+fn managed_features_from_layers(layers: &ConfigLayerStack) -> Result<ManagedFeatures> {
+    let cfg: ConfigToml = layers
+        .effective_config()
+        .try_into()
+        .context("failed to deserialize merged config for feature flags")?;
+    let active_profile_name = cfg.profile.clone();
+    let config_profile = match active_profile_name.as_ref() {
+        Some(key) => cfg
+            .profiles
+            .get(key)
+            .ok_or_else(|| anyhow::anyhow!("config profile `{key}` not found"))?
+            .clone(),
+        None => Default::default(),
+    };
+    let configured_features = Features::from_sources(
+        FeatureConfigSource {
+            features: cfg.features.as_ref(),
+            include_apply_patch_tool: None,
+            experimental_use_freeform_apply_patch: cfg.experimental_use_freeform_apply_patch,
+            experimental_use_unified_exec_tool: cfg.experimental_use_unified_exec_tool,
+        },
+        FeatureConfigSource {
+            features: config_profile.features.as_ref(),
+            include_apply_patch_tool: config_profile.include_apply_patch_tool,
+            experimental_use_freeform_apply_patch: config_profile
+                .experimental_use_freeform_apply_patch,
+            experimental_use_unified_exec_tool: config_profile.experimental_use_unified_exec_tool,
+        },
+        FeatureOverrides::default(),
+    );
+    ManagedFeatures::from_configured(
+        configured_features,
+        layers.requirements().feature_requirements.clone(),
+    )
+    .context("failed to resolve managed feature flags")
 }
 
 fn apply_exec_policy_network_rules(

@@ -34,6 +34,20 @@ pub struct StartedNetworkProxy {
     _handle: NetworkProxyHandle,
 }
 
+pub(crate) fn validate_mitm_feature_gate(
+    config: &NetworkProxyConfig,
+    mitm_feature_enabled: bool,
+) -> std::io::Result<()> {
+    let uses_mitm = config.network.mitm || !config.network.mitm_hooks.is_empty();
+    if uses_mitm && !mitm_feature_enabled {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "network MITM settings are configured, but `mitm_proxy` is not enabled in the active feature configuration",
+        ));
+    }
+    Ok(())
+}
+
 impl StartedNetworkProxy {
     fn new(proxy: NetworkProxy, handle: NetworkProxyHandle) -> Self {
         Self {
@@ -88,9 +102,11 @@ impl NetworkProxySpec {
 
     pub(crate) fn from_config_and_constraints(
         config: NetworkProxyConfig,
+        mitm_feature_enabled: bool,
         requirements: Option<NetworkConstraints>,
         sandbox_policy: &SandboxPolicy,
     ) -> std::io::Result<Self> {
+        validate_mitm_feature_gate(&config, mitm_feature_enabled)?;
         let base_config = config.clone();
         let hard_deny_allowlist_misses = requirements
             .as_ref()
@@ -160,6 +176,7 @@ impl NetworkProxySpec {
     ) -> std::io::Result<Self> {
         Self::from_config_and_constraints(
             self.base_config.clone(),
+            /*mitm_feature_enabled*/ true,
             self.requirements.clone(),
             sandbox_policy,
         )

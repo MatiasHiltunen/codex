@@ -595,6 +595,100 @@ async fn permissions_profiles_network_populates_runtime_network_proxy_spec() -> 
 }
 
 #[tokio::test]
+async fn permissions_profiles_network_mitm_requires_feature_gate() {
+    let codex_home = TempDir::new().expect("tempdir");
+    let cwd = TempDir::new().expect("tempdir");
+    std::fs::write(cwd.path().join(".git"), "gitdir: nowhere").expect("write gitdir");
+
+    let err = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            default_permissions: Some("workspace".to_string()),
+            permissions: Some(PermissionsToml {
+                entries: BTreeMap::from([(
+                    "workspace".to_string(),
+                    PermissionProfileToml {
+                        filesystem: Some(FilesystemPermissionsToml {
+                            entries: BTreeMap::from([(
+                                ":minimal".to_string(),
+                                FilesystemPermissionToml::Access(FileSystemAccessMode::Read),
+                            )]),
+                        }),
+                        network: Some(NetworkToml {
+                            mitm: Some(true),
+                            ..Default::default()
+                        }),
+                    },
+                )]),
+            }),
+            ..Default::default()
+        },
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            ..Default::default()
+        },
+        codex_home.abs(),
+    )
+    .await
+    .expect_err("MITM should be gated");
+
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    assert!(
+        err.to_string()
+            .contains("network MITM settings are configured, but `mitm_proxy` is not enabled in the active feature configuration")
+    );
+}
+
+#[tokio::test]
+async fn permissions_profiles_network_mitm_allows_opt_in_feature_gate() -> std::io::Result<()> {
+    let codex_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+    std::fs::write(cwd.path().join(".git"), "gitdir: nowhere")?;
+
+    let mut entries = BTreeMap::new();
+    entries.insert("mitm_proxy".to_string(), true);
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            features: Some(FeaturesToml::from(entries)),
+            default_permissions: Some("workspace".to_string()),
+            permissions: Some(PermissionsToml {
+                entries: BTreeMap::from([(
+                    "workspace".to_string(),
+                    PermissionProfileToml {
+                        filesystem: Some(FilesystemPermissionsToml {
+                            entries: BTreeMap::from([(
+                                ":minimal".to_string(),
+                                FilesystemPermissionToml::Access(FileSystemAccessMode::Read),
+                            )]),
+                        }),
+                        network: Some(NetworkToml {
+                            enabled: Some(true),
+                            mitm: Some(true),
+                            proxy_url: Some("http://127.0.0.1:43128".to_string()),
+                            ..Default::default()
+                        }),
+                    },
+                )]),
+            }),
+            ..Default::default()
+        },
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            ..Default::default()
+        },
+        codex_home.abs(),
+    )
+    .await?;
+
+    let network = config
+        .permissions
+        .network
+        .as_ref()
+        .expect("enabled profile network should produce a NetworkProxySpec");
+    assert_eq!(network.proxy_host_and_port(), "127.0.0.1:43128");
+    Ok(())
+}
+
+#[tokio::test]
 async fn permissions_profiles_network_disabled_by_default_does_not_start_proxy()
 -> std::io::Result<()> {
     let codex_home = TempDir::new()?;
