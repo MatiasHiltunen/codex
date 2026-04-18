@@ -48,7 +48,10 @@ use crate::app_command::AppCommand;
 use crate::app_event::RealtimeAudioDeviceKind;
 use crate::app_server_approval_conversions::network_approval_context_to_core;
 use crate::app_server_session::ThreadSessionState;
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[cfg(any(
+    not(any(target_os = "linux", target_os = "android")),
+    all(target_os = "android", feature = "android-local-audio")
+))]
 use crate::audio_device::list_realtime_audio_device_names;
 use crate::bottom_pane::StatusLineItem;
 use crate::bottom_pane::StatusLinePreviewData;
@@ -1686,7 +1689,10 @@ impl ChatWidget {
 
     fn realtime_conversation_enabled(&self) -> bool {
         self.config.features.enabled(Feature::RealtimeConversation)
-            && cfg!(not(any(target_os = "linux", target_os = "android")))
+            && cfg!(any(
+                not(any(target_os = "linux", target_os = "android")),
+                all(target_os = "android", feature = "android-local-audio")
+            ))
     }
 
     fn realtime_audio_device_selection_enabled(&self) -> bool {
@@ -7658,7 +7664,10 @@ impl ChatWidget {
         });
     }
 
-    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    #[cfg(any(
+        not(any(target_os = "linux", target_os = "android")),
+        all(target_os = "android", feature = "android-local-audio")
+    ))]
     pub(crate) fn open_realtime_audio_device_selection(&mut self, kind: RealtimeAudioDeviceKind) {
         match list_realtime_audio_device_names(kind) {
             Ok(device_names) => {
@@ -7673,12 +7682,18 @@ impl ChatWidget {
         }
     }
 
-    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[cfg(any(
+        target_os = "linux",
+        all(target_os = "android", not(feature = "android-local-audio"))
+    ))]
     pub(crate) fn open_realtime_audio_device_selection(&mut self, kind: RealtimeAudioDeviceKind) {
         let _ = kind;
     }
 
-    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    #[cfg(any(
+        not(any(target_os = "linux", target_os = "android")),
+        all(target_os = "android", feature = "android-local-audio")
+    ))]
     fn open_realtime_audio_device_selection_with_names(
         &mut self,
         kind: RealtimeAudioDeviceKind,
@@ -10730,7 +10745,10 @@ impl ChatWidget {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[cfg(any(
+    not(any(target_os = "linux", target_os = "android")),
+    all(target_os = "android", feature = "android-local-audio")
+))]
 impl ChatWidget {
     pub(crate) fn update_recording_meter_in_place(&mut self, id: &str, text: &str) -> bool {
         let updated = self.bottom_pane.update_recording_meter_in_place(id, text);

@@ -5973,7 +5973,10 @@ impl App {
                     ));
                 }
             },
-            #[cfg(not(any(target_os = "linux", target_os = "android")))]
+            #[cfg(any(
+                not(any(target_os = "linux", target_os = "android")),
+                all(target_os = "android", feature = "android-local-audio")
+            ))]
             AppEvent::UpdateRecordingMeter { id, text } => {
                 // Update in place to preserve the element id for subsequent frames.
                 let updated = self.chat_widget.update_recording_meter_in_place(&id, &text);

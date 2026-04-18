@@ -7,7 +7,10 @@
 pub(super) use super::*;
 pub(super) use crate::app_event::AppEvent;
 pub(super) use crate::app_event::ExitMode;
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[cfg(any(
+    not(any(target_os = "linux", target_os = "android")),
+    all(target_os = "android", feature = "android-local-audio")
+))]
 pub(super) use crate::app_event::RealtimeAudioDeviceKind;
 pub(super) use crate::app_event_sender::AppEventSender;
 pub(super) use crate::bottom_pane::LocalImageAttachment;

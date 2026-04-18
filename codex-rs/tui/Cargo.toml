@@ -20,6 +20,12 @@ path = "src/lib.rs"
 [lints]
 workspace = true
 
+[features]
+default = []
+# Enable CPAL-backed local audio when building Android app targets.
+# Leave this feature disabled for Termux builds.
+android-local-audio = ["dep:cpal"]
+
 [dependencies]
 anyhow = { workspace = true }
 base64 = { workspace = true }
@@ -117,6 +123,9 @@ tokio-util = { workspace = true, features = ["time"] }
 
 [target.'cfg(not(any(target_os = "linux", target_os = "android")))'.dependencies]
 cpal = "0.15"
+
+[target.'cfg(target_os = "android")'.dependencies]
+cpal = { version = "0.15", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

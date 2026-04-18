@@ -63,7 +63,13 @@ impl AppEventSender {
         ));
     }
 
-    #[cfg_attr(any(target_os = "linux", target_os = "android"), allow(dead_code))]
+    #[cfg_attr(
+        any(
+            target_os = "linux",
+            all(target_os = "android", not(feature = "android-local-audio"))
+        ),
+        allow(dead_code)
+    )]
     pub(crate) fn realtime_conversation_audio(&self, params: ConversationAudioParams) {
         self.send(AppEvent::CodexOp(
             AppCommand::realtime_conversation_audio(params).into_core(),

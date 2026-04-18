@@ -1275,7 +1275,10 @@ impl BottomPane {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[cfg(any(
+    not(any(target_os = "linux", target_os = "android")),
+    all(target_os = "android", feature = "android-local-audio")
+))]
 impl BottomPane {
     pub(crate) fn insert_recording_meter_placeholder(&mut self, text: &str) -> String {
         let id = self.composer.insert_recording_meter_placeholder(text);

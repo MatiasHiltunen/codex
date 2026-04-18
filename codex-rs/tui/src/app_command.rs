@@ -121,7 +121,13 @@ impl AppCommand {
         Self(Op::RealtimeConversationStart(params))
     }
 
-    #[cfg_attr(any(target_os = "linux", target_os = "android"), allow(dead_code))]
+    #[cfg_attr(
+        any(
+            target_os = "linux",
+            all(target_os = "android", not(feature = "android-local-audio"))
+        ),
+        allow(dead_code)
+    )]
     pub(crate) fn realtime_conversation_audio(params: ConversationAudioParams) -> Self {
         Self(Op::RealtimeConversationAudio(params))
     }
