@@ -807,28 +807,6 @@ async fn thread_title_from_state_db(
         .flatten()
 }
 
-struct CancelTokenOnDrop {
-    token: Option<CancellationToken>,
-}
-
-impl CancelTokenOnDrop {
-    fn new(token: CancellationToken) -> Self {
-        Self { token: Some(token) }
-    }
-
-    fn disarm(&mut self) {
-        self.token = None;
-    }
-}
-
-impl Drop for CancelTokenOnDrop {
-    fn drop(&mut self) {
-        if let Some(token) = self.token.take() {
-            token.cancel();
-        }
-    }
-}
-
 impl Session {
     pub(crate) async fn app_server_client_metadata(&self) -> AppServerClientMetadata {
         let state = self.state.lock().await;
@@ -1988,7 +1966,6 @@ impl Session {
         turn_context: &Arc<TurnContext>,
         call_id: String,
         args: RequestPermissionsArgs,
-        cancellation_token: CancellationToken,
     ) -> Option<RequestPermissionsResponse> {
         match turn_context.as_ref().approval_policy.value() {
             AskForApproval::Never => {
@@ -2026,18 +2003,19 @@ impl Session {
                 reason: args.reason,
                 permissions: requested_permissions.clone(),
             };
-            let review_cancel_token = cancellation_token.child_token();
-            let mut cancel_review_on_drop = CancelTokenOnDrop::new(review_cancel_token.clone());
-            let review_rx = crate::guardian::spawn_approval_request_review_with_cancel(
-                session,
-                turn,
-                review_id,
-                request,
-                /*retry_reason*/ None,
-                review_cancel_token,
-            );
-            let decision = review_rx.await.unwrap_or(ReviewDecision::Abort);
-            cancel_review_on_drop.disarm();
+            let decision = tokio::task::spawn_blocking(move || {
+                let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                else {
+                    return ReviewDecision::Denied;
+                };
+                runtime.block_on(crate::guardian::review_approval_request(
+                    &session, &turn, review_id, request, /*retry_reason*/ None,
+                ))
+            })
+            .await
+            .unwrap_or(ReviewDecision::Denied);
             let response = match decision {
                 ReviewDecision::Approved | ReviewDecision::ApprovedExecpolicyAmendment { .. } => {
                     RequestPermissionsResponse {
