@@ -49,6 +49,27 @@ just test
 cargo test --all-features
 ```
 
+### Android and Termux
+
+The Rust workspace can be built for Android, but the default `codex-tui` Android build keeps
+local audio disabled so Termux builds do not pull in the `cpal` audio stack.
+
+If you are building an Android app target and want CPAL-backed local audio, enable it explicitly:
+
+```bash
+cargo build -p codex-tui --target aarch64-linux-android --features android-local-audio
+```
+
+If a native Termux build fails with `Text file busy (os error 26)` while Cargo is running a build
+script binary such as `target/.../build-script-build`, rerun the build serially:
+
+```bash
+CARGO_BUILD_JOBS=1 cargo build -j1
+```
+
+That error is usually an execution race in the local environment rather than a `codex-rs` source
+error.
+
 ## Tracing / verbose logging
 
 Codex is written in Rust, so it honors the `RUST_LOG` environment variable to configure its logging behavior.
