@@ -6010,6 +6010,8 @@ Keymap template: https://github.com/openai/codex/blob/main/docs/default-keymap.t
                 self.keymap = runtime_keymap.clone();
                 self.chat_widget
                     .apply_keymap_update(keymap_config, &runtime_keymap);
+                self.chat_widget
+                    .refresh_keymap_action_menu(&context, &action, &runtime_keymap);
                 self.chat_widget.add_info_message(
                     format!("Remapped `{context}.{action}` to `{key}`."),
                     /*hint*/ None,
@@ -6056,6 +6058,8 @@ Keymap template: https://github.com/openai/codex/blob/main/docs/default-keymap.t
                 self.keymap = runtime_keymap.clone();
                 self.chat_widget
                     .apply_keymap_update(keymap_config, &runtime_keymap);
+                self.chat_widget
+                    .refresh_keymap_action_menu(&context, &action, &runtime_keymap);
                 self.chat_widget.add_info_message(
                     format!("Removed custom shortcut for `{context}.{action}`."),
                     /*hint*/ None,
