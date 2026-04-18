@@ -1,6 +1,14 @@
 mod description;
 mod response;
+#[cfg(not(target_os = "android"))]
 mod runtime;
+#[cfg(target_os = "android")]
+#[path = "runtime_stub.rs"]
+mod runtime;
+#[cfg(not(target_os = "android"))]
+mod service;
+#[cfg(target_os = "android")]
+#[path = "service_stub.rs"]
 mod service;
 
 pub use description::CODE_MODE_PRAGMA_PREFIX;
@@ -30,3 +38,7 @@ pub use service::CodeModeTurnWorker;
 
 pub const PUBLIC_TOOL_NAME: &str = "exec";
 pub const WAIT_TOOL_NAME: &str = "wait";
+
+pub fn is_runtime_supported() -> bool {
+    cfg!(not(target_os = "android"))
+}
