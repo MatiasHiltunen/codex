@@ -495,6 +495,14 @@ impl Codex {
             warn!("{message}");
             config.startup_warnings.push(message);
         }
+        if config.features.enabled(Feature::CodeMode) && !codex_code_mode::is_runtime_supported() {
+            let message = "Disabled `exec` for this session because the code mode runtime is unavailable in this build."
+                .to_string();
+            warn!("{message}");
+            let _ = config.features.disable(Feature::CodeMode);
+            let _ = config.features.disable(Feature::CodeModeOnly);
+            config.startup_warnings.push(message);
+        }
         if config.features.enabled(Feature::CodeMode)
             && let Err(err) = resolve_compatible_node(config.js_repl_node_path.as_deref()).await
         {

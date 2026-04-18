@@ -11,9 +11,9 @@ use codex_protocol::protocol::RealtimeOutputModality;
 use codex_realtime_webrtc::RealtimeWebrtcEvent;
 use codex_realtime_webrtc::RealtimeWebrtcSession;
 use codex_realtime_webrtc::RealtimeWebrtcSessionHandle;
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
 use std::sync::atomic::AtomicU16;
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
 use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -31,13 +31,13 @@ pub(super) struct RealtimeConversationUiState {
     requested_close: bool,
     session_id: Option<String>,
     transport: RealtimeConversationUiTransport,
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     pub(super) meter_placeholder_id: Option<String>,
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     capture_stop_flag: Option<Arc<AtomicBool>>,
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     capture: Option<crate::voice::VoiceCapture>,
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     audio_player: Option<crate::voice::RealtimeAudioPlayer>,
 }
 
@@ -60,7 +60,7 @@ impl RealtimeConversationUiState {
         )
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     pub(super) fn is_active(&self) -> bool {
         matches!(self.phase, RealtimeConversationPhase::Active)
     }
@@ -199,7 +199,7 @@ impl ChatWidget {
         self.request_realtime_conversation_close(/*info_message*/ None);
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     pub(crate) fn stop_realtime_conversation_for_deleted_meter(&mut self, id: &str) -> bool {
         if self.realtime_conversation.is_live()
             && self.realtime_conversation.meter_placeholder_id.as_deref() == Some(id)
@@ -441,12 +441,12 @@ impl ChatWidget {
             return;
         }
 
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         {
             let _ = peak;
         }
 
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
         {
             let RealtimeConversationUiTransport::Webrtc {
                 handle: Some(handle),
@@ -478,7 +478,7 @@ impl ChatWidget {
     }
 
     fn enqueue_realtime_audio_out(&mut self, frame: &RealtimeAudioFrame) {
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
         {
             if self.realtime_conversation.audio_player.is_none() {
                 self.realtime_conversation.audio_player =
@@ -490,23 +490,23 @@ impl ChatWidget {
                 warn!("failed to play realtime audio: {err}");
             }
         }
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         {
             let _ = frame;
         }
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     fn interrupt_realtime_audio_playback(&mut self) {
         if let Some(player) = &self.realtime_conversation.audio_player {
             player.clear();
         }
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     fn interrupt_realtime_audio_playback(&mut self) {}
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     fn start_realtime_local_audio(&mut self) {
         if self.realtime_conversation.capture_stop_flag.is_some() {
             return;
@@ -536,7 +536,7 @@ impl ChatWidget {
         }
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     fn start_realtime_webrtc_meter(&mut self, peak: Arc<AtomicU16>) {
         if self.realtime_conversation.capture_stop_flag.is_some() {
             return;
@@ -547,7 +547,7 @@ impl ChatWidget {
         self.realtime_conversation.capture_stop_flag = Some(stop_flag);
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     fn start_realtime_meter(&mut self, stop_flag: Arc<AtomicBool>, peak: Arc<AtomicU16>) {
         let placeholder_id = self.bottom_pane.insert_recording_meter_placeholder("⠤⠤⠤⠤");
         self.realtime_conversation.meter_placeholder_id = Some(placeholder_id.clone());
@@ -556,10 +556,10 @@ impl ChatWidget {
         start_realtime_meter_task(placeholder_id, self.app_event_tx.clone(), stop_flag, peak);
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     fn start_realtime_local_audio(&mut self) {}
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     pub(crate) fn restart_realtime_audio_device(&mut self, kind: RealtimeAudioDeviceKind) {
         if !self.realtime_conversation.is_active() {
             return;
@@ -587,21 +587,21 @@ impl ChatWidget {
         self.request_redraw();
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     pub(crate) fn restart_realtime_audio_device(&mut self, kind: RealtimeAudioDeviceKind) {
         let _ = kind;
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     fn stop_realtime_local_audio(&mut self) {
         self.stop_realtime_microphone();
         self.stop_realtime_speaker();
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     fn stop_realtime_local_audio(&mut self) {}
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     fn stop_realtime_microphone(&mut self) {
         if let Some(flag) = self.realtime_conversation.capture_stop_flag.take() {
             flag.store(true, Ordering::Relaxed);
@@ -614,7 +614,7 @@ impl ChatWidget {
         }
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     fn stop_realtime_speaker(&mut self) {
         if let Some(player) = self.realtime_conversation.audio_player.take() {
             player.clear();
@@ -649,7 +649,7 @@ fn start_realtime_webrtc_offer_task(app_event_tx: AppEventSender) {
     });
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
 fn start_realtime_meter_task(
     meter_placeholder_id: String,
     app_event_tx: AppEventSender,
