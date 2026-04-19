@@ -33,8 +33,11 @@ use serde::Serialize;
 use std::time::Duration;
 use tokio::fs;
 use tokio::io::AsyncReadExt;
+use tracing::debug;
+use tracing::warn;
 
 use crate::config::Config;
+use crate::file_locking::is_unsupported_try_lock_error;
 use codex_config::types::HistoryPersistence;
 use codex_utils_absolute_path::AbsolutePathBuf;
 
@@ -67,9 +70,11 @@ fn history_filepath(config: &Config) -> AbsolutePathBuf {
 /// Append a `text` entry associated with `conversation_id` to the history file.
 ///
 /// Uses advisory file locking (`File::try_lock`) with a retry loop to ensure
-/// concurrent writes from multiple TUI processes do not interleave. The lock
-/// acquisition and write are performed inside `spawn_blocking` so the caller's
-/// async runtime is not blocked.
+/// concurrent writes from multiple TUI processes do not interleave when the
+/// platform supports it. On platforms without std file-lock support, falls back
+/// to a best-effort append without trimming. The lock acquisition and write are
+/// performed inside `spawn_blocking` so the caller's async runtime is not
+/// blocked.
 ///
 /// The entry is silently skipped when `config.history.persistence` is
 /// [`HistoryPersistence::None`].
@@ -78,7 +83,7 @@ fn history_filepath(config: &Config) -> AbsolutePathBuf {
 ///
 /// Returns an I/O error if the history file cannot be opened/created, the
 /// system clock is before the Unix epoch, or the exclusive lock cannot be
-/// acquired after [`MAX_RETRIES`] attempts.
+/// acquired after [`MAX_RETRIES`] attempts on platforms that support it.
 pub async fn append_entry(text: &str, conversation_id: &ThreadId, config: &Config) -> Result<()> {
     match config.history.persistence {
         HistoryPersistence::SaveAll => {
@@ -131,22 +136,27 @@ pub async fn append_entry(text: &str, conversation_id: &ThreadId, config: &Confi
     let history_max_bytes = config.history.max_bytes;
 
     // Perform a blocking write under an advisory write lock using std::fs.
+    let path_display = path.display().to_string();
     tokio::task::spawn_blocking(move || -> Result<()> {
         // Retry a few times to avoid indefinite blocking when contended.
         for _ in 0..MAX_RETRIES {
             match history_file.try_lock() {
                 Ok(()) => {
-                    // While holding the exclusive lock, write the full line.
-                    // We do not open the file with `append(true)` on Windows, so ensure the
-                    // cursor is positioned at the end before writing.
-                    history_file.seek(SeekFrom::End(0))?;
-                    history_file.write_all(line.as_bytes())?;
-                    history_file.flush()?;
+                    append_history_line(&mut history_file, &line)?;
                     enforce_history_limit(&mut history_file, history_max_bytes)?;
                     return Ok(());
                 }
                 Err(std::fs::TryLockError::WouldBlock) => {
                     std::thread::sleep(RETRY_SLEEP);
+                }
+                Err(error) if is_unsupported_try_lock_error(&error) => {
+                    debug!(
+                        error = %error,
+                        path = %path_display,
+                        "history file locking is unavailable; appending without a lock"
+                    );
+                    append_history_line(&mut history_file, &line)?;
+                    return Ok(());
                 }
                 Err(e) => return Err(e.into()),
             }
@@ -159,6 +169,15 @@ pub async fn append_entry(text: &str, conversation_id: &ThreadId, config: &Confi
     })
     .await??;
 
+    Ok(())
+}
+
+fn append_history_line(file: &mut File, line: &str) -> Result<()> {
+    // We do not open the file with `append(true)` on Windows, so ensure the
+    // cursor is positioned at the end before writing.
+    file.seek(SeekFrom::End(0))?;
+    file.write_all(line.as_bytes())?;
+    file.flush()?;
     Ok(())
 }
 
@@ -269,8 +288,8 @@ pub async fn history_metadata(config: &Config) -> (u64, usize) {
 /// parse failure, all of which are logged at `warn` level.
 ///
 /// This function is synchronous because it acquires a shared advisory file lock
-/// via `File::try_lock_shared`. Callers on an async runtime should wrap it in
-/// `spawn_blocking`.
+/// via `File::try_lock_shared` when the platform supports it. Callers on an
+/// async runtime should wrap it in `spawn_blocking`.
 pub fn lookup(log_id: u64, offset: usize, config: &Config) -> Option<HistoryEntry> {
     let path = history_filepath(config);
     lookup_history_entry(&path, log_id, offset)
@@ -328,13 +347,10 @@ async fn history_metadata_for_file(path: &Path) -> (u64, usize) {
 }
 
 fn lookup_history_entry(path: &Path, log_id: u64, offset: usize) -> Option<HistoryEntry> {
-    use std::io::BufRead;
-    use std::io::BufReader;
-
     let file: File = match OpenOptions::new().read(true).open(path) {
         Ok(f) => f,
         Err(e) => {
-            tracing::warn!(error = %e, "failed to open history file");
+            warn!(error = %e, "failed to open history file");
             return None;
         }
     };
@@ -342,7 +358,7 @@ fn lookup_history_entry(path: &Path, log_id: u64, offset: usize) -> Option<Histo
     let metadata = match file.metadata() {
         Ok(m) => m,
         Err(e) => {
-            tracing::warn!(error = %e, "failed to stat history file");
+            warn!(error = %e, "failed to stat history file");
             return None;
         }
     };
@@ -359,36 +375,48 @@ fn lookup_history_entry(path: &Path, log_id: u64, offset: usize) -> Option<Histo
         let lock_result = file.try_lock_shared();
 
         match lock_result {
-            Ok(()) => {
-                let reader = BufReader::new(&file);
-                for (idx, line_res) in reader.lines().enumerate() {
-                    let line = match line_res {
-                        Ok(l) => l,
-                        Err(e) => {
-                            tracing::warn!(error = %e, "failed to read line from history file");
-                            return None;
-                        }
-                    };
-
-                    if idx == offset {
-                        match serde_json::from_str::<HistoryEntry>(&line) {
-                            Ok(entry) => return Some(entry),
-                            Err(e) => {
-                                tracing::warn!(error = %e, "failed to parse history entry");
-                                return None;
-                            }
-                        }
-                    }
-                }
-                // Not found at requested offset.
-                return None;
-            }
+            Ok(()) => return read_history_entry_at_offset(&file, offset),
             Err(std::fs::TryLockError::WouldBlock) => {
                 std::thread::sleep(RETRY_SLEEP);
             }
+            Err(error) if is_unsupported_try_lock_error(&error) => {
+                debug!(
+                    error = %error,
+                    "history file locking is unavailable; reading without a lock"
+                );
+                return read_history_entry_at_offset(&file, offset);
+            }
             Err(e) => {
-                tracing::warn!(error = %e, "failed to acquire shared lock on history file");
+                warn!(error = %e, "failed to acquire shared lock on history file");
                 return None;
+            }
+        }
+    }
+
+    None
+}
+
+fn read_history_entry_at_offset(file: &File, offset: usize) -> Option<HistoryEntry> {
+    use std::io::BufRead;
+    use std::io::BufReader;
+
+    let reader = BufReader::new(file);
+    for (idx, line_res) in reader.lines().enumerate() {
+        let line = match line_res {
+            Ok(line) => line,
+            Err(error) => {
+                warn!(error = %error, "failed to read line from history file");
+                return None;
+            }
+        };
+
+        if idx == offset {
+            match serde_json::from_str::<HistoryEntry>(&line) {
+                Ok(entry) => return Some(entry),
+                Err(error) => {
+                    warn!(error = %error, "failed to parse history entry");
+                    return None;
+                }
             }
         }
     }

@@ -678,6 +678,19 @@ fn latest_session_cwd_filter<'a>(
     }
 }
 
+fn format_error_chain(error: &dyn std::error::Error) -> String {
+    let mut messages = vec![error.to_string()];
+    let mut source = error.source();
+    while let Some(next) = source {
+        let message = next.to_string();
+        if messages.last() != Some(&message) {
+            messages.push(message);
+        }
+        source = next.source();
+    }
+    messages.join(": ")
+}
+
 pub async fn run_main(
     mut cli: Cli,
     arg0_paths: Arg0DispatchPaths,
@@ -1026,7 +1039,7 @@ pub async fn run_main(
         environment_manager,
     )
     .await
-    .map_err(|err| std::io::Error::other(err.to_string()))
+    .map_err(|err| std::io::Error::other(format_error_chain(&*err)))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2453,6 +2466,14 @@ trust_level = "untrusted"
             "warning should reference the final config's theme name"
         );
         Ok(())
+    }
+
+    #[test]
+    fn format_error_chain_includes_sources() {
+        let error = std::io::Error::other("root cause");
+        let wrapped = color_eyre::eyre::Report::new(error).wrap_err("outer failure");
+
+        assert_eq!(format_error_chain(&*wrapped), "outer failure: root cause");
     }
 
     #[tokio::test]

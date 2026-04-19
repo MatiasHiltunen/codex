@@ -10,8 +10,10 @@ use std::os::unix::fs::OpenOptionsExt;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+use crate::file_locking::is_unsupported_lock_error;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use tokio::fs;
+use tracing::warn;
 use uuid::Uuid;
 
 pub(crate) const INSTALLATION_ID_FILENAME: &str = "installation_id";
@@ -29,7 +31,17 @@ pub(crate) async fn resolve_installation_id(codex_home: &AbsolutePathBuf) -> Res
         }
 
         let mut file = options.open(&path)?;
-        file.lock()?;
+        if let Err(error) = file.lock() {
+            if is_unsupported_lock_error(&error) {
+                warn!(
+                    error = %error,
+                    path = %path.display(),
+                    "file locking is unavailable for installation_id; proceeding without a lock"
+                );
+            } else {
+                return Err(error);
+            }
+        }
 
         #[cfg(unix)]
         {
